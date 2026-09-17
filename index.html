@@ -239,6 +239,28 @@
   }
   .podium-card.first .rank-name { font-size: 30px; color: var(--purple-bright); }
   .rank-name.pending { color: var(--muted); font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500; }
+  .podium-photo-box {
+    width: 68%;
+    max-width: 110px;
+    margin: 0 auto 12px;
+    aspect-ratio: 3 / 4;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid var(--brass);
+    background: var(--bg);
+  }
+  .podium-card.first .podium-photo-box { max-width: 130px; }
+  .podium-avatar { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .podium-avatar-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    color: var(--muted);
+  }
 
   /* ---------- TABS ---------- */
   .tabs {
@@ -658,13 +680,14 @@
 </div>
 
 <script>
-const BRACKET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=1459350820&single=true&output=csv";
-const LEADERBOARD_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=156436652&single=true&output=csv";
-const BETTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=258716593&single=true&output=csv";
-const PENDAFTARAN_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=957198987&single=true&output=csv";
-const PENGATURAN_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=1095881067&single=true&output=csv";
+const BRACKET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=673109357&single=true&output=csv";
+const LEADERBOARD_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=775305265&single=true&output=csv";
+const BETTING_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=1380028562&single=true&output=csv";
+const PENDAFTARAN_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=71683672&single=true&output=csv";
+const PENGATURAN_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRlTI0QpSfCEa4Ht-CLUgfsPAmpZ5_fN6iiRiCjng8RBLr5D4YkF2wESgli_yfo4kPBuoqDNroH9jsa/pub?gid=337847731&single=true&output=csv";
 
 const REFRESH_MS = 60000;
+const HOUSE_CUT_PCT = 0.20; // dipotong hanya dari uang pihak yang kalah
 let lastFetchTime = null;
 let currentRoundIndex = 0;
 let roundsData = [];
@@ -971,22 +994,37 @@ function renderMatches(round) {
 }
 
 // ---------- LEADERBOARD ----------
+function podiumAvatarHtml(name) {
+  const initial = esc((name || "").trim().charAt(0).toUpperCase() || "?");
+  const url = name ? fighterPhotos[name] : null;
+  if (url) {
+    return `<img class="podium-avatar" src="${esc(url)}" alt="" loading="lazy" decoding="async"` +
+      ` onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` +
+      `<span class="podium-avatar-fallback" style="display:none">${initial}</span>`;
+  }
+  return `<span class="podium-avatar-fallback">${initial}</span>`;
+}
+
 function renderLeaderboard(rows) {
   const podium = document.getElementById("podium");
   const j1 = (rows[2] && rows[2][1] || "").trim();
   const j2 = (rows[3] && rows[3][1] || "").trim();
   const j3 = (rows[4] && rows[4][1] || "").trim();
   const pending = (v) => !v || v === "Belum ditentukan";
+  const photoBlock = (name) => pending(name) ? "" : `<div class="podium-photo-box">${podiumAvatarHtml(name)}</div>`;
   podium.innerHTML = `
     <div class="podium-card second${fadeCls()}">
+      ${photoBlock(j2)}
       <div class="rank-label">Juara 2</div>
       <div class="rank-name ${pending(j2) ? "pending" : ""}">${esc(pending(j2) ? "Belum ditentukan" : j2)}</div>
     </div>
     <div class="podium-card first${fadeCls()}">
+      ${photoBlock(j1)}
       <div class="rank-label">Juara 1</div>
       <div class="rank-name ${pending(j1) ? "pending" : ""}">${esc(pending(j1) ? "Belum ditentukan" : j1)}</div>
     </div>
     <div class="podium-card third${fadeCls()}">
+      ${photoBlock(j3)}
       <div class="rank-label">Juara 3</div>
       <div class="rank-name ${pending(j3) ? "pending" : ""}">${esc(pending(j3) ? "Belum ditentukan" : j3)}</div>
     </div>
@@ -1005,10 +1043,8 @@ function renderBetting(rows) {
     if (!noMatch || !fA) continue;
     const totalA = moneyToNumber(r[12]);
     const totalB = moneyToNumber(r[13]);
-    const totalPool = moneyToNumber(r[14]);
-    const payoutPool = moneyToNumber(r[17]);
     const pemenang = (r[18] || "").trim();
-    cards.push({ noMatch, fA, fB, totalA, totalB, totalPool, payoutPool, pemenang, rawA: r[12], rawB: r[13], rawPool: r[14], rawPayout: r[17] });
+    cards.push({ noMatch, fA, fB, totalA, totalB, pemenang, rawA: r[12], rawB: r[13] });
   }
   if (!cards.length) {
     list.innerHTML = `<div class="empty-state${fadeCls()}">Belum ada taruhan yang dibuka.</div>`;
@@ -1016,10 +1052,12 @@ function renderBetting(rows) {
   }
   list.innerHTML = "";
   cards.forEach(c => {
-    const pctA = c.totalPool ? Math.round((c.totalA / c.totalPool) * 100) : 50;
+    const totalPool = c.totalA + c.totalB;
+    const pctA = totalPool ? Math.round((c.totalA / totalPool) * 100) : 50;
     const pctB = 100 - pctA;
-    const oddsA = c.totalA ? (c.payoutPool / c.totalA).toFixed(2) : "-";
-    const oddsB = c.totalB ? (c.payoutPool / c.totalB).toFixed(2) : "-";
+    // Menang = modal balik utuh + bagian dari uang pihak yang kalah (house cut hanya motong uang yang kalah)
+    const oddsA = c.totalA ? (1 + (c.totalB * (1 - HOUSE_CUT_PCT)) / c.totalA).toFixed(2) : "-";
+    const oddsB = c.totalB ? (1 + (c.totalA * (1 - HOUSE_CUT_PCT)) / c.totalB).toFixed(2) : "-";
     const el = document.createElement("div");
     el.className = "odds-card" + fadeCls();
     el.innerHTML = `
