@@ -365,6 +365,7 @@
   .featured-grid {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 18px;
   }
   .featured-card {
@@ -373,7 +374,7 @@
     flex-direction: column;
     background: linear-gradient(160deg, var(--purple) 0%, var(--ink) 120%);
     border: 1px solid var(--line);
-    padding: 14px 16px 16px;
+    padding: 14px 16px 40px;
     position: relative;
     overflow: hidden;
     color: #FBF8FF;
@@ -970,28 +971,62 @@ function updateLiveLabel() {
   if (lastFetchTime) lastUpdated.textContent = relativeTime(lastFetchTime);
 }
 
+const CACHE_KEY = "fightClubCache_v1";
+
+function saveCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ data, savedAt: Date.now() }));
+  } catch (e) { /* storage unavailable or full — ignore, cache is best-effort */ }
+}
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function renderAll(data) {
+  const { bracketRows, lbRows, betRows, regRows, setRows } = data;
+  fighterPhotos = buildFighterPhotos(regRows);
+  const bannerUrl = (setRows[3] && setRows[3][1] || "").trim();
+  applyCommitteePhoto(bannerUrl);
+  roundsData = buildBracket(bracketRows);
+  if (currentRoundIndex >= roundsData.length) currentRoundIndex = 0;
+  renderFeatured(collectFeaturedMatches(roundsData));
+  renderTabs(roundsData);
+  renderMatches(roundsData[currentRoundIndex]);
+  renderLeaderboard(lbRows);
+  renderBetting(betRows);
+}
+
 async function loadAll() {
   try {
     const [bracketRows, lbRows, betRows, regRows, setRows] = await Promise.all([
       fetchCSV(BRACKET_URL), fetchCSV(LEADERBOARD_URL), fetchCSV(BETTING_URL),
       fetchCSV(PENDAFTARAN_URL), fetchCSV(PENGATURAN_URL)
     ]);
-    fighterPhotos = buildFighterPhotos(regRows);
-    const bannerUrl = (setRows[3] && setRows[3][1] || "").trim();
-    applyCommitteePhoto(bannerUrl);
-    roundsData = buildBracket(bracketRows);
-    if (currentRoundIndex >= roundsData.length) currentRoundIndex = 0;
-    renderFeatured(collectFeaturedMatches(roundsData));
-    renderTabs(roundsData);
-    renderMatches(roundsData[currentRoundIndex]);
-    renderLeaderboard(lbRows);
-    renderBetting(betRows);
+    const data = { bracketRows, lbRows, betRows, regRows, setRows };
+    renderAll(data);
+    saveCache(data);
     lastFetchTime = Date.now();
     updateLiveLabel();
   } catch (err) {
-    document.getElementById("liveLabel").textContent = "GAGAL MEMUAT DATA";
-    document.getElementById("lastUpdated").textContent = "Cek koneksi atau link spreadsheet.";
     console.error(err);
+    const cached = loadCache();
+    if (cached) {
+      renderAll(cached.data);
+      lastFetchTime = null;
+      const s = Math.round((Date.now() - cached.savedAt) / 1000);
+      const rel = s < 60 ? `${s} detik lalu` : `${Math.round(s / 60)} menit lalu`;
+      document.getElementById("liveLabel").textContent = "OFFLINE - DATA TERAKHIR";
+      document.getElementById("lastUpdated").textContent = `Gagal ambil data baru. Data terakhir ${rel}`;
+    } else {
+      document.getElementById("liveLabel").textContent = "GAGAL MEMUAT DATA";
+      document.getElementById("lastUpdated").textContent = "Cek koneksi atau link spreadsheet.";
+    }
   }
 }
 
