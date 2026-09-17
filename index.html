@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>1C Underground Fight Kishin High School</title>
+<title>Underground Fight Kishin High School</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -61,6 +63,14 @@
 
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .fade-in { animation: fadeIn 0.4s ease both; }
+  @media (prefers-reduced-motion: reduce) {
+    .fade-in { animation: none; }
+  }
   body {
     background: var(--bg);
     color: var(--ink);
@@ -512,6 +522,22 @@
     border-radius: 999px;
     pointer-events: none;
   }
+  .featured-share-btn {
+    position: absolute;
+    bottom: 10px; left: 12px;
+    z-index: 3;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .featured-share-btn:hover { background: rgba(0,0,0,0.7); }
+  .featured-share-btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
 
   /* ---------- POSTER LIGHTBOX ---------- */
   .poster-modal {
@@ -547,6 +573,7 @@
   }
   .poster-modal-card:hover { transform: none; }
   .poster-modal-card .featured-expand { display: none; }
+  .poster-modal-card .featured-share-btn { font-size: 13px; padding: 6px 14px; bottom: 16px; left: 18px; }
   .poster-modal-card .featured-top { font-size: 15px; }
   .poster-modal-card .featured-badge,
   .poster-modal-card .featured-round { font-size: 15px; }
@@ -642,6 +669,11 @@ let lastFetchTime = null;
 let currentRoundIndex = 0;
 let roundsData = [];
 let fighterPhotos = {};
+let firstRenderDone = false;
+
+function fadeCls() {
+  return firstRenderDone ? "" : " fade-in";
+}
 
 function parseCSV(text) {
   const rows = [];
@@ -708,7 +740,7 @@ function avatarHtml(name, small) {
   const url = fighterPhotos[name];
   const initial = esc(name.trim().charAt(0).toUpperCase() || "?");
   if (url) {
-    return `<span class="avatar-wrap"><img class="avatar" src="${esc(url)}" alt=""` +
+    return `<span class="avatar-wrap"><img class="avatar" src="${esc(url)}" alt="" loading="lazy" decoding="async"` +
       ` onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` +
       `<span class="avatar-fallback abs" style="display:none">${initial}</span></span>`;
   }
@@ -757,7 +789,7 @@ function featuredAvatarHtml(name) {
   const initial = esc((name || "").trim().charAt(0).toUpperCase() || "?");
   const url = name ? fighterPhotos[name] : null;
   if (url) {
-    return `<img class="featured-avatar" src="${esc(url)}" alt=""` +
+    return `<img class="featured-avatar" src="${esc(url)}" alt="" loading="lazy" decoding="async"` +
       ` onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` +
       `<span class="featured-avatar-fallback" style="display:none">${initial}</span>`;
   }
@@ -790,6 +822,7 @@ function featuredCardContentHtml(round, m) {
         <span class="featured-name ${f1Win ? "lost" : ""}">${esc(m.f2) || "TBD"}</span>
       </div>
     </div>
+    <button type="button" class="featured-share-btn">Bagikan</button>
     <span class="featured-expand" aria-hidden="true">&#8599; Perbesar</span>
   `;
 }
@@ -810,10 +843,28 @@ function fighterPosterContentHtml(name) {
   `;
 }
 
+function shareMatch(round, m) {
+  const text = `${m.f1 || "TBD"} VS ${m.f2 || "TBD"} — Match ${m.no}, ${shortLabel(round)}`;
+  const url = window.location.href;
+  if (navigator.share) {
+    navigator.share({ title: "1C Underground Fight", text, url }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(`${text}\n${url}`)
+      .then(() => alert("Link match ini sudah disalin, tinggal tempel ke chat!"))
+      .catch(() => alert(url));
+  } else {
+    alert(url);
+  }
+}
+
 function openPosterModal(round, m) {
   const card = document.getElementById("posterModalCard");
   card.className = "featured-card poster-modal-card";
   card.innerHTML = featuredCardContentHtml(round, m);
+  card.querySelector(".featured-share-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    shareMatch(round, m);
+  });
   document.getElementById("posterModal").classList.add("open");
   document.body.style.overflow = "hidden";
 }
@@ -840,13 +891,21 @@ function renderFeatured(items) {
   grid.innerHTML = "";
   items.forEach(({ round, match: m }) => {
     const card = document.createElement("div");
-    card.className = "featured-card";
+    card.className = "featured-card" + fadeCls();
     card.setAttribute("role", "button");
     card.setAttribute("tabindex", "0");
     card.setAttribute("aria-label", `Perbesar poster ${m.f1 || "TBD"} vs ${m.f2 || "TBD"}`);
     card.innerHTML = featuredCardContentHtml(round, m);
-    card.addEventListener("click", () => openPosterModal(round, m));
+    card.querySelector(".featured-share-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      shareMatch(round, m);
+    });
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".featured-share-btn")) return;
+      openPosterModal(round, m);
+    });
     card.addEventListener("keydown", (e) => {
+      if (e.target.closest(".featured-share-btn")) return;
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPosterModal(round, m); }
     });
     grid.appendChild(card);
@@ -877,19 +936,19 @@ function shortLabel(label) {
 function renderMatches(round) {
   const grid = document.getElementById("matchGrid");
   if (!round || !round.matches.length) {
-    grid.innerHTML = '<div class="empty-state">Belum ada data untuk ronde ini.</div>';
+    grid.innerHTML = `<div class="empty-state${fadeCls()}">Belum ada data untuk ronde ini.</div>`;
     return;
   }
   grid.innerHTML = "";
   round.matches.forEach(m => {
     const card = document.createElement("div");
     if (!m.f1 && !m.f2) {
-      card.className = "match-card empty";
+      card.className = "match-card empty" + fadeCls();
       card.innerHTML = `Match ${m.no} belum diisi`;
       grid.appendChild(card);
       return;
     }
-    card.className = "match-card";
+    card.className = "match-card" + fadeCls();
     const f1Loser = m.pemenang && m.pemenang === m.f2 && m.f1;
     const f2Loser = m.pemenang && m.pemenang === m.f1 && m.f2;
     const fighterIdAttrs = (name) => name
@@ -919,15 +978,15 @@ function renderLeaderboard(rows) {
   const j3 = (rows[4] && rows[4][1] || "").trim();
   const pending = (v) => !v || v === "Belum ditentukan";
   podium.innerHTML = `
-    <div class="podium-card second">
+    <div class="podium-card second${fadeCls()}">
       <div class="rank-label">Juara 2</div>
       <div class="rank-name ${pending(j2) ? "pending" : ""}">${esc(pending(j2) ? "Belum ditentukan" : j2)}</div>
     </div>
-    <div class="podium-card first">
+    <div class="podium-card first${fadeCls()}">
       <div class="rank-label">Juara 1</div>
       <div class="rank-name ${pending(j1) ? "pending" : ""}">${esc(pending(j1) ? "Belum ditentukan" : j1)}</div>
     </div>
-    <div class="podium-card third">
+    <div class="podium-card third${fadeCls()}">
       <div class="rank-label">Juara 3</div>
       <div class="rank-name ${pending(j3) ? "pending" : ""}">${esc(pending(j3) ? "Belum ditentukan" : j3)}</div>
     </div>
@@ -952,7 +1011,7 @@ function renderBetting(rows) {
     cards.push({ noMatch, fA, fB, totalA, totalB, totalPool, payoutPool, pemenang, rawA: r[12], rawB: r[13], rawPool: r[14], rawPayout: r[17] });
   }
   if (!cards.length) {
-    list.innerHTML = '<div class="empty-state">Belum ada taruhan yang dibuka.</div>';
+    list.innerHTML = `<div class="empty-state${fadeCls()}">Belum ada taruhan yang dibuka.</div>`;
     return;
   }
   list.innerHTML = "";
@@ -962,7 +1021,7 @@ function renderBetting(rows) {
     const oddsA = c.totalA ? (c.payoutPool / c.totalA).toFixed(2) : "-";
     const oddsB = c.totalB ? (c.payoutPool / c.totalB).toFixed(2) : "-";
     const el = document.createElement("div");
-    el.className = "odds-card";
+    el.className = "odds-card" + fadeCls();
     el.innerHTML = `
       <div class="odds-top"><span>MATCH ${esc(c.noMatch)}</span><span>${c.pemenang ? "Selesai" : "Berlangsung"}</span></div>
       <div class="odds-fighters">
@@ -1024,6 +1083,7 @@ function renderAll(data) {
   renderMatches(roundsData[currentRoundIndex]);
   renderLeaderboard(lbRows);
   renderBetting(betRows);
+  firstRenderDone = true;
 }
 
 async function loadAll() {
