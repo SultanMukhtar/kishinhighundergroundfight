@@ -385,6 +385,67 @@
     padding: 18px 0;
   }
 
+  /* ---------- SPONSORSHIP ---------- */
+  .sponsor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  .sponsor-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--brass);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sponsor-logo-box {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    background: var(--bg);
+  }
+  .sponsor-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .sponsor-logo-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 30px;
+    color: var(--muted);
+  }
+  .sponsor-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sponsor-rank {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    color: var(--brass);
+    flex-shrink: 0;
+    min-width: 22px;
+    text-align: center;
+  }
+  .sponsor-info { min-width: 0; }
+  .sponsor-name {
+    font-weight: 700;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sponsor-amount {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
   footer {
     margin-top: 56px;
     padding-top: 18px;
@@ -606,17 +667,6 @@
   .poster-modal-card .featured-names-row,
   .poster-modal-card .featured-vs { gap: 16px; }
 
-  /* ---------- CLICKABLE FIGHTER (BRACKET) ---------- */
-  .fighter-id.clickable { cursor: pointer; }
-  .fighter-id.clickable:hover .avatar,
-  .fighter-id.clickable:hover .avatar-fallback,
-  .fighter-id.clickable:focus-visible .avatar,
-  .fighter-id.clickable:focus-visible .avatar-fallback {
-    outline: 2px solid var(--purple-bright);
-    outline-offset: 1px;
-  }
-  .fighter-id.clickable:focus-visible { outline-offset: 1px; }
-
   @media (max-width: 560px) {
     .podium { grid-template-columns: 1fr; }
     .podium-card.first { order: -1; }
@@ -665,6 +715,11 @@
   <section id="betting-section">
     <div class="sec-head"><h2>Odds Taruhan</h2><span class="sub">Pool per match, house cut sudah dipotong</span></div>
     <div class="odds-list" id="oddsList"><div class="empty-state">Memuat data taruhan…</div></div>
+  </section>
+
+  <section id="sponsor-section">
+    <div class="sec-head"><h2>Sponsor</h2><span class="sub">Terima kasih untuk para pendukung acara</span></div>
+    <div class="sponsor-grid" id="sponsorGrid"><div class="empty-state">Memuat data sponsor…</div></div>
   </section>
 
   <footer>
@@ -748,6 +803,55 @@ function buildFighterPhotos(rows) {
     if (name && photo) map[name] = photo;
   }
   return map;
+}
+
+// ---------- SPONSORSHIP ----------
+function buildSponsors(rows) {
+  const list = [];
+  for (let i = 3; i <= 52; i++) {
+    const r = rows[i];
+    if (!r) break;
+    const nama = (r[10] || "").trim();
+    const nominal = (r[11] || "").trim();
+    const foto = (r[12] || "").trim();
+    if (!nama) continue;
+    list.push({ nama, rawNominal: nominal, foto });
+  }
+  return list;
+}
+
+function sponsorLogoHtml(nama, url) {
+  const initial = esc((nama || "").trim().charAt(0).toUpperCase() || "?");
+  if (url) {
+    return `<img class="sponsor-logo" src="${esc(url)}" alt="" loading="lazy" decoding="async"` +
+      ` onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">` +
+      `<span class="sponsor-logo-fallback" style="display:none">${initial}</span>`;
+  }
+  return `<span class="sponsor-logo-fallback">${initial}</span>`;
+}
+
+function renderSponsors(list) {
+  const grid = document.getElementById("sponsorGrid");
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state${fadeCls()}">Belum ada sponsor yang terdaftar.</div>`;
+    return;
+  }
+  grid.innerHTML = "";
+  list.forEach((s, i) => {
+    const el = document.createElement("div");
+    el.className = "sponsor-card" + fadeCls();
+    el.innerHTML = `
+      <div class="sponsor-logo-box">${sponsorLogoHtml(s.nama, s.foto)}</div>
+      <div class="sponsor-meta">
+        <span class="sponsor-rank">#${i + 1}</span>
+        <div class="sponsor-info">
+          <div class="sponsor-name">${esc(s.nama)}</div>
+          <div class="sponsor-amount">${esc(s.rawNominal) || "-"}</div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(el);
+  });
 }
 
 function applyCommitteePhoto(url) {
@@ -850,22 +954,6 @@ function featuredCardContentHtml(round, m) {
   `;
 }
 
-function fighterPosterContentHtml(name) {
-  return `
-    <div class="featured-top">
-      <span class="featured-badge">FIGHTER</span>
-    </div>
-    <div class="featured-vs single">
-      <div class="featured-photos-row">
-        <div class="featured-photo-box">${featuredAvatarHtml(name)}</div>
-      </div>
-      <div class="featured-names-row">
-        <span class="featured-name">${esc(name) || "TBD"}</span>
-      </div>
-    </div>
-  `;
-}
-
 function shareMatch(round, m) {
   const text = `${m.f1 || "TBD"} VS ${m.f2 || "TBD"} — Match ${m.no}, ${shortLabel(round)}`;
   const url = window.location.href;
@@ -888,15 +976,6 @@ function openPosterModal(round, m) {
     e.stopPropagation();
     shareMatch(round, m);
   });
-  document.getElementById("posterModal").classList.add("open");
-  document.body.style.overflow = "hidden";
-}
-
-function openFighterPoster(name) {
-  if (!name) return;
-  const card = document.getElementById("posterModalCard");
-  card.className = "featured-card poster-modal-card";
-  card.innerHTML = fighterPosterContentHtml(name);
   document.getElementById("posterModal").classList.add("open");
   document.body.style.overflow = "hidden";
 }
@@ -974,18 +1053,15 @@ function renderMatches(round) {
     card.className = "match-card" + fadeCls();
     const f1Loser = m.pemenang && m.pemenang === m.f2 && m.f1;
     const f2Loser = m.pemenang && m.pemenang === m.f1 && m.f2;
-    const fighterIdAttrs = (name) => name
-      ? `class="fighter-id clickable" data-fighter="${esc(name)}" role="button" tabindex="0" aria-label="Perbesar poster ${esc(name)}"`
-      : `class="fighter-id"`;
     card.innerHTML = `
       <div class="mno">MATCH ${m.no}</div>
       <div class="fighter-row ${f1Loser ? "loser" : ""}">
-        <span ${fighterIdAttrs(m.f1)}>${avatarHtml(m.f1)}<span>${esc(m.f1) || "TBD"}</span></span>
+        <span class="fighter-id"><span>${esc(m.f1) || "TBD"}</span></span>
         ${m.pemenang && m.pemenang === m.f1 ? '<span class="stamp">MENANG</span>' : ""}
       </div>
       <div class="vs">VS</div>
       <div class="fighter-row ${f2Loser ? "loser" : ""}">
-        <span ${fighterIdAttrs(m.f2)}>${avatarHtml(m.f2)}<span>${esc(m.f2) || "TBD"}</span></span>
+        <span class="fighter-id"><span>${esc(m.f2) || "TBD"}</span></span>
         ${m.pemenang && m.pemenang === m.f2 ? '<span class="stamp">MENANG</span>' : ""}
       </div>
     `;
@@ -1112,6 +1188,7 @@ function loadCache() {
 function renderAll(data) {
   const { bracketRows, lbRows, betRows, regRows, setRows } = data;
   fighterPhotos = buildFighterPhotos(regRows);
+  renderSponsors(buildSponsors(regRows));
   const bannerUrl = (setRows[3] && setRows[3][1] || "").trim();
   applyCommitteePhoto(bannerUrl);
   roundsData = buildBracket(bracketRows);
@@ -1159,15 +1236,6 @@ document.getElementById("posterModal").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closePosterModal();
-});
-document.getElementById("matchGrid").addEventListener("click", (e) => {
-  const el = e.target.closest(".fighter-id.clickable[data-fighter]");
-  if (el) openFighterPoster(el.dataset.fighter);
-});
-document.getElementById("matchGrid").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const el = e.target.closest(".fighter-id.clickable[data-fighter]");
-  if (el) { e.preventDefault(); openFighterPoster(el.dataset.fighter); }
 });
 setInterval(() => { if (lastFetchTime) updateLiveLabel(); }, 5000);
 setInterval(loadAll, REFRESH_MS);
